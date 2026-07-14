@@ -1,1 +1,3 @@
-discord.py
+herediscord.py
+Pillow
+aiohttp
