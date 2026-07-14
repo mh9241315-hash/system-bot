@@ -1,38 +1,83 @@
-import discord
+hereimport discord
 from discord.ext import commands
 import os
 
-# إعداد البوت والبادئة (مثلاً !)
 intents = discord.Intents.default()
-intents.members = True
 intents.message_content = True
+intents.members = True # مهم جداً لاستقبال الأعضاء الجدد وقراءة بياناتهم
+intents.guilds = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# 🆔 آيدي الروم التي ستنزل فيها رسالة الترحيب تلقائياً
+WELCOME_CHANNEL_ID = 1513674839104295153
+
+# 🆔 آيدي روم القوانين للإشارة إليها داخل الرسالة
+RULES_CHANNEL_ID = 1513675305867411566
+
 @bot.event
 async def on_ready():
-    print(f"تم تشغيل البوت بنجاح باسم: {bot.user}")
+    print(f"⚙️ سيستم بوت الترحيب والإدارة جاهز للعمل: {bot.user.name}")
 
-# أمر الطرد (Kick)
-@bot.command()
-@commands.has_permissions(kick_members=True)
-async def kick(ctx, member: discord.Member, *, reason=None):
-    await member.kick(reason=reason)
-    await ctx.send(f"تم طرد {member.mention} من السيرفر. السبب: {reason}")
+# --- نظام الترحيب الاحترافي المطور (Welcome System) ---
+@bot.event
+async def on_member_join(member):
+    channel = bot.get_channel(WELCOME_CHANNEL_ID)
+    if channel:
+        # تنسيق رسالة الترحيب كـ Embed متطابق مع طلبك والصورة
+        embed = discord.Embed(
+            title="Welcome to **Kit Kat** 🍫",
+            description=(
+                f"أهلاً بك في عالمنا\n"
+                f"✨ {member.mention}\n"
+                f"يسعدنا انضمامك معنا في Kit Kat\n\n"
+                f"📖 Read: <#{RULES_CHANNEL_ID}>\n\n"
+                f"Done reading? Check out the channels! 🚀"
+            ),
+            color=discord.Color.red() # اللون الأحمر المتناسق مع الشعار
+        )
+        
+        # وضع الصورة الرمزية (Avatar) الخاصة بالعضو الجديد كصورة مصغرة على اليمين
+        embed.set_thumbnail(url=member.display_avatar.url)
+        
+        # وضع البانر واللوجو الفخم لـ Kit Kat أسفل الرسالة
+        embed.set_image(url="https://l.top4top.io/p_3847ligfg0.png")
+        
+        # كتابة عدد الأعضاء أسفل الرسالة للتفاعل
+        embed.set_footer(text=f"العضو رقم {len(member.guild.members)} في السيرفر")
+        
+        # إرسال منشن ترحيبي دافئ للعضو مع كرت الترحيب الأسطوري
+        await channel.send(content=f"حياك الله يا {member.mention}! 👋", embed=embed)
 
-# أمر الحظر (Ban)
-@bot.command()
-@commands.has_permissions(ban_members=True)
-async def ban(ctx, member: discord.Member, *, reason=None):
-    await member.ban(reason=reason)
-    await ctx.send(f"تم حظر {member.mention} من السيرفر. السبب: {reason}")
+# --- أوامر الإدارة والسيستم الأساسية ---
 
 # أمر مسح الشات (Clear)
 @bot.command()
 @commands.has_permissions(manage_messages=True)
-async def clear(ctx, amount: int):
+async def clear(ctx, amount: int = 5):
     await ctx.channel.purge(limit=amount + 1)
-    await ctx.send(f"تم مسح {amount} رسالة!", delete_after=5)
+    await ctx.send(f"🧹 تم مسح {amount} رسالة بنجاح!", delete_after=5)
 
-# تشغيل البوت باستخدام التوكن من الاستضافة
+# أمر الباند (Ban)
+@bot.command()
+@commands.has_permissions(ban_members=True)
+async def ban(ctx, member: discord.Member, *, reason=None):
+    await member.ban(reason=reason)
+    await ctx.send(f"🔨 تم حظر العضو {member.mention} من السيرفر. السبب: {reason}")
+
+# أمر الكيك (Kick)
+@bot.command()
+@commands.has_permissions(kick_members=True)
+async def kick(ctx, member: discord.Member, *, reason=None):
+    await member.kick(reason=reason)
+    await ctx.send(f"👞 تم طرد العضو {member.mention} من السيرفر. السبب: {reason}")
+
+# معالجة أخطاء الصلاحيات للأعضاء العاديين
+@clear.error
+@ban.error
+@kick.error
+async def admin_errors(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ عذراً يا بطل، ليس لديك الصلاحيات الكافية لاستخدام هذا الأمر!", delete_after=5)
+
 bot.run(os.getenv("TOKEN"))
