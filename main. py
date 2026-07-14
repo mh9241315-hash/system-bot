@@ -1,0 +1,38 @@
+import discord
+from discord.ext import commands
+import os
+
+# إعداد البوت والبادئة (مثلاً !)
+intents = discord.Intents.default()
+intents.members = True
+intents.message_content = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+@bot.event
+async def on_ready():
+    print(f"تم تشغيل البوت بنجاح باسم: {bot.user}")
+
+# أمر الطرد (Kick)
+@bot.command()
+@commands.has_permissions(kick_members=True)
+async def kick(ctx, member: discord.Member, *, reason=None):
+    await member.kick(reason=reason)
+    await ctx.send(f"تم طرد {member.mention} من السيرفر. السبب: {reason}")
+
+# أمر الحظر (Ban)
+@bot.command()
+@commands.has_permissions(ban_members=True)
+async def ban(ctx, member: discord.Member, *, reason=None):
+    await member.ban(reason=reason)
+    await ctx.send(f"تم حظر {member.mention} من السيرفر. السبب: {reason}")
+
+# أمر مسح الشات (Clear)
+@bot.command()
+@commands.has_permissions(manage_messages=True)
+async def clear(ctx, amount: int):
+    await ctx.channel.purge(limit=amount + 1)
+    await ctx.send(f"تم مسح {amount} رسالة!", delete_after=5)
+
+# تشغيل البوت باستخدام التوكن من الاستضافة
+bot.run(os.getenv("TOKEN"))
