@@ -1,4 +1,4 @@
-    import discord
+        import discord
 from discord.ext import commands
 from discord import app_commands
 import os
@@ -28,6 +28,9 @@ CONFIG_FILE = "system_config.json"
 # الآيديهات الافتراضية للرومات (روم كرت الترحيب + روم الشات العام)
 DEFAULT_WELCOME_CHANNEL_ID = 1515157531842973888  # روم كارت الترحيب بالصورة
 DEFAULT_GENERAL_CHAT_ID = 1513676299066015874     # روم الشات العام المخصصة للمنشن والترحيب السريع
+
+# اسم الرتبة التلقائية المطلوبة
+AUTO_ROLE_NAME = "KITKAT's🍫"
 
 # رابط خلفية الترحيب الفخمة المحددة من قبلك
 WELCOME_BG_URL = "https://e.top4top.io/p_3847ysunn0.png"
@@ -91,7 +94,7 @@ async def create_welcome_card(avatar_url, member_count):
 async def on_ready():
     print(f"🛡️ بوت السيستم والحماية جاهز للعمل: {bot.user.name}")
 
-# --- 1. نظام الترحيب الثلاثي الأبعاد ---
+# --- 1. نظام الترحيب الثلاثي وإعطاء الرتبة التلقائية ---
 @bot.event
 async def on_member_join(member):
     config = load_config()
@@ -126,7 +129,7 @@ async def on_member_join(member):
         else:
             await welcome_channel.send(content=welcome_msg)
 
-    # 📥 الجزء الثالث: الترحيب السريع بالمنشن في الشات العام (روم الدردشة الأساسية)
+    # 📥 الجزء الثالث: الترحيب السريع بالمنشن في الشات العام
     general_chat_id = config.get("general_chat", DEFAULT_GENERAL_CHAT_ID)
     general_channel = member.guild.get_channel(general_chat_id)
     
@@ -134,14 +137,11 @@ async def on_member_join(member):
         chat_welcome_msg = f"Welcome to {member.mention}"
         await general_channel.send(chat_welcome_msg)
 
-    # منح رتبة الدخول التلقائية للعضو إن وجدت
-    role_id = config.get("welcome_role")
-    if role_id:
-        role = member.guild.get_role(role_id)
-        if role:
-            await member.add_roles(role)
-
-# --- 2. نظام التنبيه الفوري عند مغادرة العضو ---
-@bot.event
-async def on_member_remove(member):
-    config = load_config()
+    # 📥 الجزء الرابع: منح رتبة الدخول التلقائية للعضو الجديد
+    # أولاً: يبحث عن رتبة KITKAT's🍫 بالاسم بشكل تلقائي
+    auto_role = discord.utils.get(member.guild.roles, name=AUTO_ROLE_NAME)
+    
+    if auto_role:
+        try:
+            await member.add_roles(auto_role)
+ 
