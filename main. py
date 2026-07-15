@@ -1,11 +1,173 @@
-    import discord
+here# config.py
+
+# الآيديهات الافتراضية للرومات
+DEFAULT_WELCOME_CHANNEL_ID = 1515157531842973888  # روم كارت الترحيب بالصورة
+DEFAULT_GENERAL_CHAT_ID = 1513676299066015874     # روم الشات العام
+LEAVE_CHANNEL_ID = 1516566921666101479            # روم القوانين والمغادرة المخصصة
+
+# اسم الرتبة التلقائية المطلوبة
+AUTO_ROLE_NAME = "KITKAT's🍫"
+
+# رابط خلفية الترحيب الفخمة المحددة من قبلك
+WELCOME_BG_URL = "https://e.top4top.io/p_3847ysunn0.png"
+
+# اسم ملف حفظ الإعدادات تلقائياً
+CONFIG_FILE = "system_config.json"# card.py
+import aiohttp
+from PIL import Image, ImageDraw, ImageFont
+import io
+from config import WELCOME_BG_URL
+
+async def create_welcome_card(avatar_url, member_count):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(WELCOME_BG_URL) as resp:
+            if resp.status != 200: return None
+            bg_bytes = await resp.read()
+        async with session.get(avatar_url) as resp:
+            if resp.status != 200: return None
+            avatar_bytes = await resp.read()
+
+    background = Image.open(io.BytesIO(bg_bytes)).convert("RGBA")
+    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
+
+    # تحديد حجم وموضع الأفاتار المربع
+    avatar_size = (194, 194)
+    square_avatar = avatar.resize(avatar_size, Image.Resampling.LANCZOS)
+
+    # لصق الأفاتار المربع مباشرة في إحداثياته الدقيقة على اليسار
+    background.paste(square_avatar, (52, 53), square_avatar)
+    draw = ImageDraw.Draw(background)
+    
+    try:
+        font = ImageFont.truetype("arial.ttf", 45)
+    except IOError:
+        font = ImageFont.load_default()
+
+    # كتابة رقم الترتيب في الجانب الأيمن من الكرت
+    draw.text((630, 160), f"MEMBER #{member_count}", fill="white", font=font, anchor="mm")
+
+    output = io.BytesIO()
+    background.save(output, format="PNG")
+    output.seek(0)
+    return output# events.py
+import discord
+import os
+import json
+from card import create_welcome_card
+from config import (
+    CONFIG_FILE, DEFAULT_WELCOME_CHANNEL_ID, DEFAULT_GENERAL_CHAT_ID, 
+    LEAVE_CHANNEL_ID, AUTO_ROLE_NAME
+)
+
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as f:
+            return json.load(f)
+    return {
+        "welcome_channel": DEFAULT_WELCOME_CHANNEL_ID, 
+        "general_chat": DEFAULT_GENERAL_CHAT_ID,
+        "welcome_role": None
+    }
+
+def register_events(bot):
+
+    # 1. نظام الترحيب الثلاثي عند دخول عضو جديد
+    @bot.event
+    async def on_member_join(member):
+        config = load_config()
+
+        # أ. رسالة ترحيب خاصة (DM)
+        try:
+            dm_msg = (
+                f"🍫 **Welcome to KIT KAT!**\n"
+                f"يا هلا وغلا بيك يا {member.mention} في سيرفرنا الأسطوري! نورت عائلتنا الفخمة ✨🎉"
+            )
+            await member.send(dm_msg)
+        except discord.Forbidden:
+            pass
+
+        # ب. الترحيب العام بكارت صوري ورسالة التوجيه للقوانين
+        welcome_channel_id = config.get("welcome_channel", DEFAULT_WELCOME_CHANNEL_ID)
+        welcome_channel = member.guild.get_channel(welcome_channel_id)
+        
+        if welcome_channel:
+            member_count = len(member.guild.members)
+            avatar_url = member.display_avatar.url
+            card_bytes = await create_welcome_card(avatar_url, member_count)
+            
+            welcome_msg = (
+                f"🍫 **Welcome to KIT KAT**\n"
+                f"✨ نورتنا في سيرفرنا يا {member.mention}! يسعدنا انضمامك لعائلتنا.. 🍫👑\n"
+                f"📖 يرجى قراءة القوانين في: <#{LEAVE_CHANNEL_ID}>"
+            )
+            
+            if card_bytes:
+                file = discord.File(fp=card_bytes, filename="welcome.png")
+                await welcome_channel.send(content=welcome_msg, file=file)
+            else:
+                await welcome_channel.send(content=welcome_msg)
+
+        # ج. الترحيب السريع بالمنشن في الشات العام
+        general_chat_id = config.get("general_chat", DEFAULT_GENERAL_CHAT_ID)
+        general_channel = member.guild.get_channel(general_chat_id)
+        
+        if general_channel:
+            chat_welcome_msg = f"Welcome to {member.mention}"
+            await general_channel.send(chat_welcome_msg)
+
+        # د. منح الرتبة التلقائية
+        auto_role = discord.utils.get(member.guild.roles, name=AUTO_ROLE_NAME)
+        if auto_role:
+            try:
+                await member.add_roles(auto_role)
+            except discord.Forbidden:
+                pass
+        else:
+            role_id = config.get("welcome_role")
+            if role_id:
+                role = member.guild.get_role(role_id)
+                if role:
+                    try:
+                        await member.add_roles(role)
+                    except discord.Forbidden:
+                        pass
+
+    # 2. نظام التنبيه بالمغادرة في الروم المخصصة
+    @bot.event
+    async def on_member_remove(member):
+        leave_channel = member.guild.get_channel(LEAVE_CHANNEL_ID)
+        if leave_channel:
+            await leave_channel.send(f"📤 **غادرنا أحد الأصدقاء...**\n😢 {member.display_name} قد غادر السيرفر، نتمنى له التوفيق!")
+
+    # 3. نظام الحماية الصارم ضد الإعلانات (Anti-Ad)
+    @bot.event
+    async def on_message(message):
+        if message.author.bot or not message.guild:
+            return
+
+        content_lower = message.content.lower()
+        if "discord.gg/" in content_lower or "discord.com/invite/" in content_lower:
+            try:
+                await message.delete()
+                await message.author.ban(reason="نشر رابط سيرفر ديسكورد آخر (إعلانات تلقائية)")
+                await message.channel.send(
+                    f"🚨 **نظام الحماية والأمن:** تم حظر العضو {message.author.mention} نهائياً لمخالفته القوانين ونشر رابط سيرفر ديسكورد آخر! 🔨"
+                )
+                return
+            except discord.Forbidden:
+                await message.channel.send(
+                    f"⚠️ **تنبيه الإدارة:** حاول البوت حظر {message.author.mention} بسبب الإعلانات ولكن يفتقر لصلاحية (Ban Members)."
+                )
+                return
+
+        await bot.process_commands(message)# main.py
+import discord
 from discord.ext import commands
 from discord import app_commands
 import os
 import json
-import aiohttp
-from PIL import Image, ImageDraw, ImageFont
-import io
+from config import CONFIG_FILE, DEFAULT_WELCOME_CHANNEL_ID, DEFAULT_GENERAL_CHAT_ID
+from events import register_events, load_config
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -22,120 +184,42 @@ class SystemBot(commands.Bot):
 
 bot = SystemBot()
 
-# ملف حفظ الإعدادات تلقائياً
-CONFIG_FILE = "system_config.json"
-
-# الآيديهات الافتراضية للرومات (روم كرت الترحيب + روم الشات العام + روم المغادرة/القوانين المخصصة)
-DEFAULT_WELCOME_CHANNEL_ID = 1515157531842973888  # روم كارت الترحيب بالصورة
-DEFAULT_GENERAL_CHAT_ID = 1513676299066015874     # روم الشات العام المخصصة للمنشن والترحيب السريع
-LEAVE_CHANNEL_ID = 1516566921666101479            # روم القوانين والمغادرة المخصصة
-
-# اسم الرتبة التلقائية المطلوبة
-AUTO_ROLE_NAME = "KITKAT's🍫"
-
-# رابط خلفية الترحيب الفخمة المحددة من قبلك
-WELCOME_BG_URL = "https://e.top4top.io/p_3847ysunn0.png"
-
-def load_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
-            return json.load(f)
-    return {
-        "welcome_channel": DEFAULT_WELCOME_CHANNEL_ID, 
-        "general_chat": DEFAULT_GENERAL_CHAT_ID,
-        "welcome_role": None
-    }
+# تسجيل كافة الأحداث والحماية من ملف الأحداث
+register_events(bot)
 
 def save_config(config):
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=4)
 
-# --- دالة رسم كرت الترحيب بالأعضاء الجدد (تم تعديل الأفاتار ليكون مربعاً) ---
-async def create_welcome_card(avatar_url, member_count):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(WELCOME_BG_URL) as resp:
-            if resp.status != 200: return None
-            bg_bytes = await resp.read()
-        async with session.get(avatar_url) as resp:
-            if resp.status != 200: return None
-            avatar_bytes = await resp.read()
+# --- لوحة التحكم وأوامر الـ Slash Commands ---
 
-    background = Image.open(io.BytesIO(bg_bytes)).convert("RGBA")
-    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
+@bot.tree.command(name="setwelcomechannel", description="تحديد الروم التي سيتم إرسال رسائل الترحيب وكروت الدخول فيها")
+@app_commands.checks.has_permissions(administrator=True)
+async def setwelcomechannel(interaction: discord.Interaction, channel: discord.TextChannel):
+    config = load_config()
+    config["welcome_channel"] = channel.id
+    save_config(config)
+    await interaction.response.send_message(f"✅ تم تحديد {channel.mention} لتكون روم كروت الترحيب بالصورة الرسمية بالسيرفر!")
 
-    # تحديد حجم وموضع الأفاتار المربع ليتناسب تماماً مع المربع المخصص له على اليسار
-    avatar_size = (194, 194)
-    square_avatar = avatar.resize(avatar_size, Image.Resampling.LANCZOS)
+@bot.tree.command(name="setgeneralchat", description="تحديد روم الشات العام للترحيب بالمنشن السريع بدون صور")
+@app_commands.checks.has_permissions(administrator=True)
+async def setgeneralchat(interaction: discord.Interaction, channel: discord.TextChannel):
+    config = load_config()
+    config["general_chat"] = channel.id
+    save_config(config)
+    await interaction.response.send_message(f"✅ تم تحديد {channel.mention} لتكون روم الشات العام للترحيب السريع بالمنشن!")
 
-    # وضع الأفاتار المربع في إحداثياته الدقيقة على اليسار مباشرة بدون قص دائري
-    background.paste(square_avatar, (52, 53), square_avatar)
-    draw = ImageDraw.Draw(background)
-    
-    try:
-        font = ImageFont.truetype("arial.ttf", 45)
-    except IOError:
-        font = ImageFont.load_default()
-
-    # كتابة رقم الترتيب في الجانب الأيمن من الكرت بخط فخم
-    draw.text((630, 160), f"MEMBER #{member_count}", fill="white", font=font, anchor="mm")
-
-    output = io.BytesIO()
-    background.save(output, format="PNG")
-    output.seek(0)
-    return output
+@bot.tree.command(name="setwelcomerole", description="تحديد رتبة بديلة يتم إعطاؤها تلقائياً للعضو فور دخوله السيرفر")
+@app_commands.checks.has_permissions(administrator=True)
+async def setwelcomerole(interaction: discord.Interaction, role: discord.Role):
+    config = load_config()
+    config["welcome_role"] = role.id
+    save_config(config)
+    await interaction.response.send_message(f"✅ سيتم إعطاء رتبة {role.mention} تلقائياً لأي عضو جديد يدخل السيرفر!")
 
 @bot.event
 async def on_ready():
     print(f"🛡️ بوت السيستم والحماية جاهز للعمل: {bot.user.name}")
 
-# --- 1. نظام الترحيب الثلاثي وإعطاء الرتبة التلقائية (تم تعديل نصوص الترحيب) ---
-@bot.event
-async def on_member_join(member):
-    config = load_config()
-
-    # 📥 الجزء الأول: رسالة قصيرة وفخمة على الخاص (DM) للعضو الجديد
-    try:
-        dm_msg = (
-            f"🍫 **Welcome to KIT KAT!**\n"
-            f"يا هلا وغلا بيك يا {member.mention} في سيرفرنا الأسطوري! نورت عائلتنا الفخمة ✨🎉"
-        )
-        await member.send(dm_msg)
-    except discord.Forbidden:
-        pass
-
-    # 📥 الجزء الثاني: الترحيب العام بكارت صوري ورسائل التعديل الجديدة
-    welcome_channel_id = config.get("welcome_channel", DEFAULT_WELCOME_CHANNEL_ID)
-    welcome_channel = member.guild.get_channel(welcome_channel_id)
-    
-    if welcome_channel:
-        member_count = len(member.guild.members)
-        avatar_url = member.display_avatar.url
-        card_bytes = await create_welcome_card(avatar_url, member_count)
-        
-        # الرسالة النصية المعدلة حسب طلبك تماماً مع منشن روم القوانين/السيستم
-        welcome_msg = (
-            f"🍫 **Welcome to KIT KAT**\n"
-            f"✨ نورتنا في سيرفرنا يا {member.mention}! يسعدنا انضمامك لعائلتنا.. 🍫👑\n"
-            f"📖 يرجى قراءة القوانين في: <#{LEAVE_CHANNEL_ID}>"
-        )
-        
-        if card_bytes:
-            file = discord.File(fp=card_bytes, filename="welcome.png")
-            await welcome_channel.send(content=welcome_msg, file=file)
-        else:
-            await welcome_channel.send(content=welcome_msg)
-
-    # 📥 الجزء الثالث: الترحيب السريع بالمنشن في الشات العام
-    general_chat_id = config.get("general_chat", DEFAULT_GENERAL_CHAT_ID)
-    general_channel = member.guild.get_channel(general_chat_id)
-    
-    if general_channel:
-        chat_welcome_msg = f"Welcome to {member.mention}"
-        await general_channel.send(chat_welcome_msg)
-
-    # 📥 الجزء الرابع: منح رتبة الدخول التلقائية للعضو الجديد
-    auto_role = discord.utils.get(member.guild.roles, name=AUTO_ROLE_NAME)
-    
-    if auto_role:
-        try:
-            await member.add_role
+# تشغيل البوت: ضع التوكن الحقيقي الخاص بك بدلاً من الكلمة أدناه عند الرغبة في التشغيل
+bot.run("اضافه توكن")
