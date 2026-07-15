@@ -1,10 +1,10 @@
-        import discord
+    import discord
 from discord.ext import commands
 from discord import app_commands
 import os
 import json
 import aiohttp
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFont
 import io
 
 intents = discord.Intents.default()
@@ -25,9 +25,10 @@ bot = SystemBot()
 # ملف حفظ الإعدادات تلقائياً
 CONFIG_FILE = "system_config.json"
 
-# الآيديهات الافتراضية للرومات (روم كرت الترحيب + روم الشات العام)
+# الآيديهات الافتراضية للرومات (روم كرت الترحيب + روم الشات العام + روم المغادرة/القوانين المخصصة)
 DEFAULT_WELCOME_CHANNEL_ID = 1515157531842973888  # روم كارت الترحيب بالصورة
 DEFAULT_GENERAL_CHAT_ID = 1513676299066015874     # روم الشات العام المخصصة للمنشن والترحيب السريع
+LEAVE_CHANNEL_ID = 1516566921666101479            # روم القوانين والمغادرة المخصصة
 
 # اسم الرتبة التلقائية المطلوبة
 AUTO_ROLE_NAME = "KITKAT's🍫"
@@ -49,7 +50,7 @@ def save_config(config):
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=4)
 
-# --- دالة رسم كرت الترحيب بالأعضاء الجدد ---
+# --- دالة رسم كرت الترحيب بالأعضاء الجدد (تم تعديل الأفاتار ليكون مربعاً) ---
 async def create_welcome_card(avatar_url, member_count):
     async with aiohttp.ClientSession() as session:
         async with session.get(WELCOME_BG_URL) as resp:
@@ -62,19 +63,12 @@ async def create_welcome_card(avatar_url, member_count):
     background = Image.open(io.BytesIO(bg_bytes)).convert("RGBA")
     avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
 
-    # تحديد حجم وموضع الأفاتار ليتناسب تماماً مع الدائرة المخصصة له على اليسار
+    # تحديد حجم وموضع الأفاتار المربع ليتناسب تماماً مع المربع المخصص له على اليسار
     avatar_size = (194, 194)
-    avatar = avatar.resize(avatar_size, Image.Resampling.LANCZOS)
-    
-    mask = Image.new("L", avatar_size, 0)
-    draw_mask = ImageDraw.Draw(mask)
-    draw_mask.ellipse((0, 0) + avatar_size, fill=255)
-    
-    circular_avatar = ImageOps.fit(avatar, avatar_size, centering=(0.5, 0.5))
-    circular_avatar.putalpha(mask)
+    square_avatar = avatar.resize(avatar_size, Image.Resampling.LANCZOS)
 
-    # وضع الأفاتار الدائري في إحداثياته الدقيقة على اليسار
-    background.paste(circular_avatar, (52, 53), circular_avatar)
+    # وضع الأفاتار المربع في إحداثياته الدقيقة على اليسار مباشرة بدون قص دائري
+    background.paste(square_avatar, (52, 53), square_avatar)
     draw = ImageDraw.Draw(background)
     
     try:
@@ -94,7 +88,7 @@ async def create_welcome_card(avatar_url, member_count):
 async def on_ready():
     print(f"🛡️ بوت السيستم والحماية جاهز للعمل: {bot.user.name}")
 
-# --- 1. نظام الترحيب الثلاثي وإعطاء الرتبة التلقائية ---
+# --- 1. نظام الترحيب الثلاثي وإعطاء الرتبة التلقائية (تم تعديل نصوص الترحيب) ---
 @bot.event
 async def on_member_join(member):
     config = load_config()
@@ -109,7 +103,7 @@ async def on_member_join(member):
     except discord.Forbidden:
         pass
 
-    # 📥 الجزء الثاني: الترحيب العام في القناة المخصصة بالسيرفر بكارت صوري
+    # 📥 الجزء الثاني: الترحيب العام بكارت صوري ورسائل التعديل الجديدة
     welcome_channel_id = config.get("welcome_channel", DEFAULT_WELCOME_CHANNEL_ID)
     welcome_channel = member.guild.get_channel(welcome_channel_id)
     
@@ -118,9 +112,11 @@ async def on_member_join(member):
         avatar_url = member.display_avatar.url
         card_bytes = await create_welcome_card(avatar_url, member_count)
         
+        # الرسالة النصية المعدلة حسب طلبك تماماً مع منشن روم القوانين/السيستم
         welcome_msg = (
-            f"📥 **أهلاً بك في عالمنا الفخم!**\n"
-            f"✨ نورت سيرفرنا يا {member.mention}! يسعدنا انضمامك لـ عائلتنا.. 🍫👑"
+            f"🍫 **Welcome to KIT KAT**\n"
+            f"✨ نورتنا في سيرفرنا يا {member.mention}! يسعدنا انضمامك لعائلتنا.. 🍫👑\n"
+            f"📖 يرجى قراءة القوانين في: <#{LEAVE_CHANNEL_ID}>"
         )
         
         if card_bytes:
@@ -138,10 +134,8 @@ async def on_member_join(member):
         await general_channel.send(chat_welcome_msg)
 
     # 📥 الجزء الرابع: منح رتبة الدخول التلقائية للعضو الجديد
-    # أولاً: يبحث عن رتبة KITKAT's🍫 بالاسم بشكل تلقائي
     auto_role = discord.utils.get(member.guild.roles, name=AUTO_ROLE_NAME)
     
     if auto_role:
         try:
-            await member.add_roles(auto_role)
- 
+            await member.add_role
