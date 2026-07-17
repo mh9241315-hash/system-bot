@@ -222,4 +222,4 @@ async def on_ready():
     print(f"🛡️ بوت السيستم والحماية جاهز للعمل: {bot.user.name}")
 
 # تشغيل البوت: ضع التوكن الحقيقي الخاص بك بدلاً من الكلمة أدناه عند الرغبة في التشغيل
-bot.run("اضافه توكن")
+bot.run("MTUxMzMzNTQxMzkzNzQxMDI2MA.Gq9QQe.XzD6_Ef_rki7RVwmyq8VhgYQnX7G5YhWIu77GI")
